@@ -1,0 +1,26 @@
+{
+  "name": "@lifelang/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@lifelang/ai": "workspace:*",
+    "@lifelang/contracts": "workspace:*",
+    "@lifelang/db": "workspace:*",
+    "@lifelang/domain": "workspace:*",
+    "drizzle-orm": "0.45.2",
+    "next": "16.2.10",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  }
+}

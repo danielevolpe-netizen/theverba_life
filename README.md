@@ -8,18 +8,19 @@ Vertical slice di una seconda vita persistente per imparare l'inglese. La prima 
 
 - onboarding essenziale italiano/inglese;
 - Today, World, People, Journey ed English;
+- menu Settings con registro gateway, LLM selezionato e stato della configurazione;
 - New York con quattro luoghi, tre NPC e una storyline;
 - scena testuale a più turni con Arthur;
-- output AI validati tramite adapter deterministico;
+- output AI validati tramite adapter deterministico o Vercel AI Gateway;
 - fatto/promessa con evidenza, relazione e avanzamento storyline;
 - messaggio conseguente di Maya;
 - debrief linguistico e mastery recognition/production;
 - memoria visibile e correggibile;
 - event ledger e misurazione token/latenza/costo;
-- persistenza demo versionata in `localStorage`;
+- persistenza canonica su Neon PostgreSQL con fallback locale versionato;
 - schema PostgreSQL Drizzle, migrazione e seed.
 
-L'adapter deterministico è intenzionale: rende demo e test riproducibili senza chiavi API. Non rappresenta ancora una conversazione generativa aperta. PostgreSQL è predisposto come source of truth production, ma la UI del walking skeleton salva localmente finché gli endpoint di M2 non sostituiscono il demo repository.
+Senza una chiave gateway l'app usa intenzionalmente l'adapter deterministico, così demo e test restano riproducibili. Con Vercel AI Gateway configurato, i turni NPC passano invece dall'LLM selezionato e il relativo JSON viene comunque validato prima di modificare il dominio. Neon è la source of truth per profilo demo, scena, messaggi, memoria, knowledge boundary, relazione, storyline, mastery, eventi e usage. `localStorage` viene usato soltanto se le API non sono disponibili ed è indicato nella UI.
 
 ## Avvio rapido
 
@@ -50,7 +51,24 @@ pnpm db:migrate
 pnpm --filter @lifelang/db db:seed
 ```
 
-La UI non legge ancora PostgreSQL: schema, migrazione e seed sono foundation pronta per il repository server-side della milestone Conversation.
+In ambienti Neon usare `DATABASE_URL` pooled per l'applicazione e
+`DATABASE_DIRECT_URL` non pooled per migrazioni e operazioni amministrative.
+
+La connessione runtime può essere verificata con `GET /api/health/database`. Lo stato aggregato del vertical slice è disponibile tramite `GET /api/demo-state`; tutte le mutation richiedono `Idempotency-Key`.
+
+## Vercel AI Gateway
+
+Le variabili necessarie sono già documentate in `.env.example`. Nel file `.env` locale impostare almeno:
+
+```dotenv
+AI_PROVIDER=vercel-gateway
+AI_GATEWAY_API_KEY=
+AI_GATEWAY_BASE_URL=https://ai-gateway.vercel.sh/v1
+AI_GATEWAY_MODEL=openai/gpt-5.4-mini
+AI_GATEWAY_TIMEOUT_MS=30000
+```
+
+`AI_GATEWAY_API_KEY` resta vuota finché non viene aggiunto il segreto. In questo stato la pagina **Settings** mostra il gateway e il modello scelto, ma segnala correttamente il fallback deterministico. Nessun valore segreto viene restituito al browser o tracciato da Git.
 
 ## Verifica
 
@@ -65,20 +83,17 @@ pnpm build
 - `apps/web`: applicazione Next.js;
 - `packages/domain`: regole pure e vertical slice;
 - `packages/contracts`: contratti Zod per AI, comandi ed eventi;
-- `packages/ai`: porta AI e adapter deterministico;
+- `packages/ai`: porta AI, adapter deterministico e adapter Vercel AI Gateway;
 - `packages/db`: schema PostgreSQL, migrazioni e seed;
 - `docs`: piano tecnico, ADR, OpenAPI e prompt template.
 
 ## Limiti attuali
 
 - identità demo, non autenticazione production;
-- repository browser-local, non ancora endpoint PostgreSQL;
-- nessun provider LLM reale o streaming SSE;
+- chiamate LLM reali subordinate alla configurazione della chiave gateway; nessuno streaming SSE;
 - nessuna voce STT/TTS;
 - retrieval semantico, worker e outbox non ancora attivi;
 - una sola scena golden e un solo learning item;
 - nessun backoffice.
 
 Il backlog e le decisioni aperte sono in [`docs/TECHNICAL_PLAN.md`](docs/TECHNICAL_PLAN.md).
-
-# theverba_life

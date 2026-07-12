@@ -1,0 +1,114 @@
+openapi: 3.1.0
+info:
+  title: LifeLang Vertical Slice API
+  version: 0.2.0
+servers:
+  - url: /api
+paths:
+  /settings/ai:
+    get:
+      operationId: getAISettings
+      description: Returns only non-secret gateway and model configuration status.
+      responses:
+        "200":
+          description: Safe AI runtime settings
+  /demo-state:
+    get:
+      operationId: getDemoState
+      responses:
+        "200":
+          description: Aggregated persistent state for the vertical slice
+  /demo-state/reset:
+    post:
+      operationId: resetDemoState
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Reset persistent demo state }
+  /profile:
+    patch:
+      operationId: updateProfile
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, level, mode]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 30 }
+                level: { type: string, enum: [A2, B1, B2] }
+                mode: { type: string, enum: [assisted, immersive] }
+      responses:
+        "200": { description: Updated persistent state }
+  /scenes/{sceneId}/start:
+    post:
+      operationId: startScene
+      parameters:
+        - $ref: "#/components/parameters/SceneId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Frozen scene brief and opening turn }
+  /scenes/{sceneId}/turns:
+    post:
+      operationId: addSceneTurn
+      parameters:
+        - $ref: "#/components/parameters/SceneId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        "200": { description: Validated NPC turn }
+  /scenes/{sceneId}/complete:
+    post:
+      operationId: completeScene
+      parameters:
+        - $ref: "#/components/parameters/SceneId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200": { description: Outcome, consequences and debrief }
+  /memories/{memoryId}:
+    patch:
+      operationId: correctMemory
+      parameters:
+        - name: memoryId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "200": { description: New memory version }
+  /health/database:
+    get:
+      operationId: getDatabaseHealth
+      responses:
+        "200": { description: Sanitized database connection status }
+components:
+  parameters:
+    SceneId:
+      name: sceneId
+      in: path
+      required: true
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 100 }

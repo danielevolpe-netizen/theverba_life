@@ -1,0 +1,20 @@
+{
+  "name": "lifelang",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.3.0",
+  "scripts": {
+    "dev": "pnpm --filter @lifelang/web dev",
+    "build": "pnpm --filter @lifelang/web build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "pnpm --filter @lifelang/db db:generate",
+    "db:migrate": "pnpm --filter @lifelang/db db:migrate"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.9"
+  }
+}

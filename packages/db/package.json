@@ -1,0 +1,26 @@
+{
+  "name": "@lifelang/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./schema": "./src/schema.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "node src/seed.mjs"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "postgres": "3.4.8"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "drizzle-kit": "0.31.10",
+    "typescript": "5.9.3"
+  }
+}
