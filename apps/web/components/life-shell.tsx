@@ -37,32 +37,54 @@ type PersistenceMode = "loading" | "neon" | "fallback";
 type AISettings = {
   requestedProvider: "deterministic" | "vercel-gateway";
   activeAdapter: "deterministic" | "vercel-gateway";
-  selectedModel: { id: string; creator: string; purpose: string };
+  activeGatewayId: string | null;
+  activeModelId: string | null;
   gateways: Array<{
-    id: "vercel-ai-gateway";
+    id: string;
     name: string;
     baseUrl: string;
     configured: boolean;
+    active: boolean;
     authentication: "api-key" | "oidc" | "missing";
-    modelCount: string;
+    catalogStatus: "live" | "fallback";
+    selectedModelId: string;
+    activeModelId: string | null;
+    models: Array<{
+      id: string;
+      name: string;
+      creator: string;
+      description: string;
+      contextWindow: number | null;
+      maxTokens: number | null;
+      tags: string[];
+    }>;
   }>;
 };
 
 const defaultAISettings: AISettings = {
   requestedProvider: "vercel-gateway",
   activeAdapter: "deterministic",
-  selectedModel: {
-    id: "openai/gpt-5.4-mini",
-    creator: "openai",
-    purpose: "NPC dialogue and structured scene commands"
-  },
+  activeGatewayId: null,
+  activeModelId: null,
   gateways: [{
     id: "vercel-ai-gateway",
     name: "Vercel AI Gateway",
     baseUrl: "https://ai-gateway.vercel.sh/v1",
     configured: false,
+    active: false,
     authentication: "missing",
-    modelCount: "200+ models"
+    catalogStatus: "fallback",
+    selectedModelId: "openai/gpt-5.4-mini",
+    activeModelId: null,
+    models: [{
+      id: "openai/gpt-5.4-mini",
+      name: "gpt-5.4-mini",
+      creator: "openai",
+      description: "Configured language model.",
+      contextWindow: null,
+      maxTokens: null,
+      tags: []
+    }]
   }]
 };
 
@@ -130,6 +152,20 @@ async function requestAISettings(signal?: AbortSignal) {
   return response.json() as Promise<AISettings>;
 }
 
+async function updateAISettings(gatewayId: string, modelId: string) {
+  const response = await fetch("/api/settings/ai", {
+    method: "PATCH",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": crypto.randomUUID()
+    },
+    body: JSON.stringify({ gatewayId, modelId })
+  });
+  if (!response.ok) throw new Error(`AI settings API returned ${response.status}.`);
+  return response.json() as Promise<AISettings>;
+}
+
 export function LifeShell() {
   const [state, setState] = useState<DemoState>(() => createDemoState());
   const [section, setSection] = useState<NavigationSection>("today");
@@ -139,17 +175,17 @@ export function LifeShell() {
   const [aiSettings, setAISettings] = useState<AISettings>(defaultAISettings);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isAISettingsPending, startAISettingsTransition] = useTransition();
 
   useEffect(() => {
     const stored = safelyLoadState();
     const controller = new AbortController();
-    Promise.all([
-      requestState("/api/demo-state", { signal: controller.signal }),
-      requestAISettings(controller.signal)
-    ])
-      .then(([nextState, nextAISettings]) => {
+    requestAISettings(controller.signal)
+      .then(setAISettings)
+      .catch(() => undefined);
+    requestState("/api/demo-state", { signal: controller.signal })
+      .then((nextState) => {
         setState(nextState);
-        setAISettings(nextAISettings);
         setPersistence("neon");
       })
       .catch(() => {
@@ -256,14 +292,35 @@ export function LifeShell() {
     });
   };
 
-  if (!hydrated) return <div className="boot-screen"><div className="brand-mark">L</div><p>Preparing your life…</p></div>;
+  const handleModelSelection = (gatewayId: string, modelId: string) => {
+    const previousSettings = aiSettings;
+    setAISettings((current) => ({
+      ...current,
+      gateways: current.gateways.map((gateway) => gateway.id === gatewayId
+        ? { ...gateway, selectedModelId: modelId }
+        : gateway)
+    }));
+    startAISettingsTransition(async () => {
+      setSyncError(null);
+      try {
+        setAISettings(await updateAISettings(gatewayId, modelId));
+      } catch {
+        setAISettings(previousSettings);
+        setSyncError("Il modello non è stato attivato. La configurazione precedente è rimasta invariata.");
+      }
+    });
+  };
+
+  const activeRuntimeLabel = aiSettings.activeModelId?.split("/").pop();
+
+  if (!hydrated) return <div className="boot-screen"><div className="brand-mark">V<i>.</i></div><p>Preparing your life…</p></div>;
 
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <button className="wordmark" type="button" onClick={() => setSection("today")} aria-label="LifeLang home">
-          <span className="brand-mark">L</span>
-          <span><strong>LifeLang</strong><small>Live the language</small></span>
+        <button className="wordmark" type="button" onClick={() => setSection("today")} aria-label="Verba home">
+          <span className="brand-mark">V<i>.</i></span>
+          <span><strong>Verba</strong><small>English at work</small></span>
         </button>
 
         <nav className="main-nav" aria-label="Main navigation">
@@ -281,7 +338,7 @@ export function LifeShell() {
         <div className="sidebar-foot">
           <div className="level-stamp"><span>B1</span><div><strong>New York life</strong><small>Day {state.world.dayNumber} · Assisted</small></div></div>
           <button className="reset-button" type="button" onClick={resetDemo} disabled={isPending}><ResetIcon /> Reset demo</button>
-          <div className={`demo-badge ${persistence}`}><span /> {persistence === "neon" ? "deterministic AI · Neon live" : "offline demo · local save"}</div>
+          <div className={`demo-badge ${persistence}`}><span /> {persistence === "neon" ? `${activeRuntimeLabel ?? "deterministic AI"} · Neon live` : "offline demo · local save"}</div>
         </div>
       </aside>
 
@@ -292,7 +349,7 @@ export function LifeShell() {
         {section === "people" ? <PeopleView state={state} /> : null}
         {section === "journey" ? <JourneyView state={state} /> : null}
         {section === "english" ? <EnglishView state={state} onCorrect={handleCorrection} /> : null}
-        {section === "settings" ? <SettingsView settings={aiSettings} persistence={persistence} /> : null}
+        {section === "settings" ? <SettingsView settings={aiSettings} persistence={persistence} isPending={isAISettingsPending} onSelectModel={handleModelSelection} /> : null}
       </section>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -451,79 +508,116 @@ function EnglishView({ state, onCorrect }: { state: DemoState; onCorrect: (memor
   );
 }
 
-function SettingsView({ settings, persistence }: { settings: AISettings; persistence: PersistenceMode }) {
-  const gateway = settings.gateways[0];
-  if (!gateway) return null;
-  const gatewayActive = settings.activeAdapter === "vercel-gateway";
-  const modelLabel = settings.selectedModel.id.split("/").slice(1).join("/");
-  const authLabel = gateway.authentication === "api-key"
-    ? "API key"
-    : gateway.authentication === "oidc"
-      ? "Vercel OIDC"
-      : "Not configured";
+const compactNumberFormatter = new Intl.NumberFormat("en", {
+  notation: "compact",
+  maximumFractionDigits: 1
+});
+
+function formatTokenLimit(value: number | null) {
+  if (value === null) return "Not reported";
+  return compactNumberFormatter.format(value);
+}
+
+function SettingsView({
+  settings,
+  persistence,
+  isPending,
+  onSelectModel
+}: {
+  settings: AISettings;
+  persistence: PersistenceMode;
+  isPending: boolean;
+  onSelectModel: (gatewayId: string, modelId: string) => void;
+}) {
+  const activeGateway = settings.gateways.find((gateway) => gateway.id === settings.activeGatewayId);
+  const activeModel = activeGateway?.models.find((model) => model.id === settings.activeModelId);
 
   return (
     <div className="page inner-page settings-page">
-      <header className="page-header">
-        <div><p className="eyebrow">System room</p><h1>The engines behind<br/><em>your living world.</em></h1></div>
-        <div className={`runtime-seal ${gatewayActive ? "live" : "safe"}`}><i/><strong>{gatewayActive ? "Live" : "Safe mode"}</strong><small>{gatewayActive ? "Gateway active" : "Deterministic fallback"}</small></div>
+      <header className="page-header settings-header">
+        <div><p className="eyebrow">AI routing</p><h1>Gateway e modelli,<br/><em>senza ambiguità.</em></h1></div>
+        <div className={`runtime-seal ${settings.activeModelId ? "live" : "safe"}`}>
+          <i/>
+          <strong>{settings.activeModelId ? "LLM attivo" : "Fallback attivo"}</strong>
+          <small>{settings.activeModelId ? activeModel?.name ?? settings.activeModelId : "Deterministic AI"}</small>
+        </div>
       </header>
 
-      <section className="settings-grid">
-        <article className="gateway-registry">
-          <div className="section-title"><div><p className="eyebrow">Gateway registry</p><h3>Connected routes</h3></div><span>{settings.gateways.length} gateway</span></div>
-          <div className="gateway-card">
-            <div className="gateway-monogram">V</div>
-            <div className="gateway-copy">
-              <div><small>PRIMARY ROUTE</small><span className={gateway.configured ? "configured" : "waiting"}>{gateway.configured ? "Configured" : "Awaiting secret"}</span></div>
-              <h2>{gateway.name}</h2>
-              <p>One controlled route to models from OpenAI, Anthropic, Google and other providers.</p>
-              <dl>
-                <div><dt>Endpoint</dt><dd>{gateway.baseUrl}</dd></div>
-                <div><dt>Authentication</dt><dd>{authLabel}</dd></div>
-                <div><dt>Catalog</dt><dd>{gateway.modelCount}</dd></div>
-              </dl>
-            </div>
-          </div>
-          <div className="future-gateway"><span>02</span><div><small>Future route</small><strong>Reserved for the next gateway</strong></div><i>Not configured</i></div>
-        </article>
-
-        <article className="model-selection">
-          <div className="section-title"><div><p className="eyebrow">Selected language model</p><h3>Dialogue brain</h3></div><span>{settings.selectedModel.creator}</span></div>
-          <div className="model-plate">
-            <span className="model-index">01 / PRIMARY</span>
-            <div className="model-orbit"><i/><i/><i/><span>LLM</span></div>
-            <small>MODEL ID</small>
-            <h2>{modelLabel}</h2>
-            <code>{settings.selectedModel.id}</code>
-            <p>{settings.selectedModel.purpose}</p>
-            <div className="model-state"><i className={gatewayActive ? "active" : "standby"}/><span><strong>{gatewayActive ? "Routing live turns" : "Selected · standing by"}</strong><small>{gatewayActive ? "Structured output validation enabled" : "Add AI_GATEWAY_API_KEY to activate"}</small></span></div>
-          </div>
-        </article>
-      </section>
-
-      <section className="execution-path">
-        <div className="section-title"><div><p className="eyebrow">Runtime path</p><h3>How a turn travels</h3></div><span>{persistence === "neon" ? "Neon state online" : "Local state fallback"}</span></div>
-        <div className="path-diagram">
-          <div className="path-node active"><small>01 · INPUT</small><strong>Scene command</strong><span>Validated user turn</span></div>
-          <ArrowIcon />
-          <div className={`path-node ${gatewayActive ? "active" : "standby"}`}><small>02 · GATEWAY</small><strong>Vercel Gateway</strong><span>{gatewayActive ? "Authenticated route" : "Awaiting key"}</span></div>
-          <ArrowIcon />
-          <div className={`path-node ${gatewayActive ? "active" : "standby"}`}><small>03 · MODEL</small><strong>{modelLabel}</strong><span>NPCTurn@1 JSON</span></div>
-          <ArrowIcon />
-          <div className="path-node active"><small>04 · DOMAIN</small><strong>Rule engine</strong><span>Only valid commands persist</span></div>
+      <section className={`active-route ${settings.activeModelId ? "live" : "fallback"}`} aria-label="Active AI route">
+        <div>
+          <p className="eyebrow">In uso adesso</p>
+          <h2>{activeGateway && activeModel ? `${activeGateway.name} → ${activeModel.name}` : "Deterministic fallback"}</h2>
+          <p>{settings.activeModelId
+            ? "I prossimi turni di Arthur useranno questo modello. La risposta resta validata prima di aggiornare il mondo."
+            : "Nessun modello remoto sta rispondendo. Arthur usa ancora il percorso deterministico locale."}</p>
         </div>
+        <div className="active-route-signal"><i/><span>{settings.activeModelId ? "ACTIVE NOW" : "NO LIVE LLM"}</span><small>{persistence === "neon" ? "Selection saved in Neon" : "Configuration not persisted"}</small></div>
       </section>
 
-      <section className="environment-checklist">
-        <div><p className="eyebrow">Environment contract</p><h3>Server-only variables</h3><p>Values stay outside the browser and Git. Settings exposes only configuration status.</p></div>
-        <ul>
-          <li><code>AI_PROVIDER</code><span className="set">vercel-gateway</span></li>
-          <li><code>AI_GATEWAY_API_KEY</code><span className={gateway.configured ? "set" : "missing"}>{gateway.configured ? "set · hidden" : "required"}</span></li>
-          <li><code>AI_GATEWAY_MODEL</code><span className="set">set</span></li>
-          <li><code>AI_GATEWAY_BASE_URL</code><span className="set">set</span></li>
-          <li><code>AI_GATEWAY_TIMEOUT_MS</code><span className="set">set</span></li>
-        </ul>
+      <section className="gateway-directory">
+        <div className="section-title gateway-directory-title">
+          <div><p className="eyebrow">Gateway registry</p><h3>Gateway configurati</h3></div>
+          <span>{settings.gateways.length} {settings.gateways.length === 1 ? "gateway" : "gateways"}</span>
+        </div>
+
+        <div className="gateway-list">
+          {settings.gateways.map((gateway, index) => {
+            const selectedModel = gateway.models.find((model) => model.id === gateway.selectedModelId)
+              ?? gateway.models[0];
+            const modelIsActive = gateway.activeModelId === gateway.selectedModelId;
+            const authLabel = gateway.authentication === "api-key"
+              ? "API key"
+              : gateway.authentication === "oidc"
+                ? "Vercel OIDC"
+                : "Missing secret";
+
+            return (
+              <article className={`gateway-entry ${gateway.active ? "active" : gateway.configured ? "ready" : "offline"}`} key={gateway.id}>
+                <header className="gateway-entry-header">
+                  <span className="gateway-index">{String(index + 1).padStart(2, "0")}</span>
+                  <div className="gateway-identity"><div className="gateway-monogram">V</div><div><small>AI GATEWAY</small><h2>{gateway.name}</h2><code>{gateway.baseUrl}</code></div></div>
+                  <div className={`gateway-availability ${gateway.active ? "active" : gateway.configured ? "ready" : "offline"}`}><i/><span>{gateway.active ? "Gateway active" : gateway.configured ? "Ready · inactive" : "Needs secret"}</span></div>
+                </header>
+
+                <div className="gateway-entry-body">
+                  <dl className="gateway-facts">
+                    <div><dt>Authentication</dt><dd>{authLabel}</dd></div>
+                    <div><dt>Model catalog</dt><dd>{gateway.models.length} language models</dd></div>
+                    <div><dt>Catalog source</dt><dd>{gateway.catalogStatus === "live" ? "Live from gateway" : "Fallback catalog"}</dd></div>
+                  </dl>
+
+                  <label className="gateway-model-select">
+                    <span>Scegli il modello per questo gateway</span>
+                    <select
+                      value={gateway.selectedModelId}
+                      disabled={isPending || gateway.models.length === 0}
+                      onChange={(event) => onSelectModel(gateway.id, event.target.value)}
+                    >
+                      {gateway.models.map((model) => <option value={model.id} key={model.id}>{model.creator} · {model.name}</option>)}
+                    </select>
+                    <small>{isPending ? "Sto applicando la nuova route…" : "La scelta viene salvata su Neon e usata dal prossimo turno."}</small>
+                  </label>
+                </div>
+
+                {selectedModel ? (
+                  <section className={`selected-model ${modelIsActive ? "active" : "inactive"}`} aria-label={`Selected model ${selectedModel.name}`}>
+                    <div className="selected-model-heading">
+                      <div><p className="eyebrow">Modello selezionato</p><h3>{selectedModel.name}</h3><code>{selectedModel.id}</code></div>
+                      <div className={`model-activity ${modelIsActive ? "active" : "inactive"}`}><i/><span>{isPending ? "Applying…" : modelIsActive ? "Attivo adesso" : "Selezionato · non attivo"}</span></div>
+                    </div>
+                    <p>{selectedModel.description || "Language model available through this gateway."}</p>
+                    <dl className="model-facts">
+                      <div><dt>Creator</dt><dd>{selectedModel.creator}</dd></div>
+                      <div><dt>Context</dt><dd>{formatTokenLimit(selectedModel.contextWindow)}</dd></div>
+                      <div><dt>Max output</dt><dd>{formatTokenLimit(selectedModel.maxTokens)}</dd></div>
+                    </dl>
+                    {selectedModel.tags.length > 0 ? <div className="model-tags">{selectedModel.tags.map((tag) => <span key={tag}>{tag}</span>)}</div> : null}
+                  </section>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
       </section>
     </div>
   );

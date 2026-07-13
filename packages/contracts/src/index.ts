@@ -90,3 +90,8 @@ export const ProfileUpdateRequestSchema = z.object({
 export const MemoryCorrectionRequestSchema = z.object({
   content: z.string().trim().min(1).max(1000)
 });
+
+export const AISettingsUpdateRequestSchema = z.object({
+  gatewayId: z.string().trim().min(3).max(80),
+  modelId: z.string().trim().regex(/^[a-z0-9][a-z0-9._-]*\/[a-zA-Z0-9][a-zA-Z0-9._:-]*$/).max(160)
+});

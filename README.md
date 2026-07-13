@@ -62,13 +62,13 @@ Le variabili necessarie sono già documentate in `.env.example`. Nel file `.env`
 
 ```dotenv
 AI_PROVIDER=vercel-gateway
-AI_GATEWAY_API_KEY=
+AI_GATEWAY_API_KEY=<vercel-ai-gateway-key>
 AI_GATEWAY_BASE_URL=https://ai-gateway.vercel.sh/v1
 AI_GATEWAY_MODEL=openai/gpt-5.4-mini
 AI_GATEWAY_TIMEOUT_MS=30000
 ```
 
-`AI_GATEWAY_API_KEY` resta vuota finché non viene aggiunto il segreto. In questo stato la pagina **Settings** mostra il gateway e il modello scelto, ma segnala correttamente il fallback deterministico. Nessun valore segreto viene restituito al browser o tracciato da Git.
+Il file `.env` nella root del workspace viene caricato dal bootstrap Next dell'app web. Dopo ogni modifica alle credenziali è necessario riavviare il server. Se `AI_GATEWAY_API_KEY` resta vuota, **Settings** mostra il gateway e il modello scelto ma segnala correttamente il fallback deterministico. Nessun valore segreto viene restituito al browser o tracciato da Git.
 
 ## Verifica
 

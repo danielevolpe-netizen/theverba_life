@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AISettingsUpdateRequestSchema,
   IdempotencyKeySchema,
   MemoryCorrectionRequestSchema,
   ProfileUpdateRequestSchema,
@@ -22,5 +23,16 @@ describe("LifeLang API contracts", () => {
     expect(ProfileUpdateRequestSchema.safeParse({ name: "Luca", level: "B1", mode: "assisted" }).success).toBe(true);
     expect(ProfileUpdateRequestSchema.safeParse({ name: "", level: "C2", mode: "school" }).success).toBe(false);
     expect(MemoryCorrectionRequestSchema.safeParse({ content: "Arthur knows I use headphones." }).success).toBe(true);
+  });
+
+  it("accepts gateway model selections and rejects malformed model IDs", () => {
+    expect(AISettingsUpdateRequestSchema.safeParse({
+      gatewayId: "vercel-ai-gateway",
+      modelId: "openai/gpt-5.4-mini"
+    }).success).toBe(true);
+    expect(AISettingsUpdateRequestSchema.safeParse({
+      gatewayId: "vercel-ai-gateway",
+      modelId: "../../secret"
+    }).success).toBe(false);
   });
 });

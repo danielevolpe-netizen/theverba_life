@@ -51,6 +51,12 @@ describe("VercelGatewaySceneAI", () => {
     expect(callCount).toBe(1);
     expect(capturedUrl).toBe("https://ai-gateway.vercel.sh/v1/chat/completions");
     expect(capturedInit?.headers).toMatchObject({ Authorization: "Bearer test-key" });
+    expect(JSON.parse(String(capturedInit?.body))).toMatchObject({
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "npc_turn", strict: true }
+      }
+    });
   });
 
   it("rejects invalid model output before it reaches the domain", async () => {

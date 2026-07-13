@@ -42,6 +42,111 @@ The NPC may only use the authorized facts provided. Keep language appropriate fo
 Allowed proposed command types are record_fact, adjust_relationship, and advance_storyline.
 Only record a fact when the user's exact message is direct evidence. Maximum three memory candidates.`;
 
+const npcTurnResponseFormat = {
+  type: "json_schema",
+  json_schema: {
+    name: "npc_turn",
+    strict: true,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "utterance",
+        "action",
+        "emotion",
+        "sceneSignals",
+        "memoryCandidates",
+        "proposedCommands",
+        "sceneStatus"
+      ],
+      properties: {
+        utterance: { type: "string", minLength: 1, maxLength: 700 },
+        action: { type: "string", maxLength: 200 },
+        emotion: {
+          type: "object",
+          additionalProperties: false,
+          required: ["label", "intensity"],
+          properties: {
+            label: { type: "string", enum: ["neutral", "warm", "curious", "concerned", "pleased"] },
+            intensity: { type: "number", minimum: 0, maximum: 1 }
+          }
+        },
+        sceneSignals: {
+          type: "array",
+          maxItems: 5,
+          items: { type: "string" }
+        },
+        memoryCandidates: {
+          type: "array",
+          maxItems: 3,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["type", "content", "confidence", "evidence"],
+            properties: {
+              type: { type: "string", enum: ["fact", "preference", "promise", "opinion"] },
+              content: { type: "string", minLength: 1 },
+              confidence: { type: "number", minimum: 0, maximum: 1 },
+              evidence: { type: "string", minLength: 1 }
+            }
+          }
+        },
+        proposedCommands: {
+          type: "array",
+          maxItems: 4,
+          items: {
+            anyOf: [
+              {
+                type: "object",
+                additionalProperties: false,
+                required: ["type", "predicate", "value", "confidence", "evidence"],
+                properties: {
+                  type: { type: "string", const: "record_fact" },
+                  predicate: {
+                    type: "string",
+                    enum: ["promised_respect_quiet_hours", "business_name", "coffee_preference"]
+                  },
+                  value: { type: "string", minLength: 1 },
+                  confidence: { type: "number", minimum: 0, maximum: 1 },
+                  evidence: { type: "string", minLength: 1 }
+                }
+              },
+              {
+                type: "object",
+                additionalProperties: false,
+                required: ["type", "dimension", "delta", "reason"],
+                properties: {
+                  type: { type: "string", const: "adjust_relationship" },
+                  dimension: {
+                    type: "string",
+                    enum: ["trust", "affinity", "respect", "familiarity", "tension"]
+                  },
+                  delta: { type: "number", minimum: -5, maximum: 5 },
+                  reason: { type: "string", minLength: 1 }
+                }
+              },
+              {
+                type: "object",
+                additionalProperties: false,
+                required: ["type", "toStage", "evidence"],
+                properties: {
+                  type: { type: "string", const: "advance_storyline" },
+                  toStage: {
+                    type: "string",
+                    enum: ["arrival", "settled_in", "cafe_invitation", "network_event"]
+                  },
+                  evidence: { type: "string", minLength: 1 }
+                }
+              }
+            ]
+          }
+        },
+        sceneStatus: { type: "string", enum: ["continue", "ready_to_close"] }
+      }
+    }
+  }
+} as const;
+
 export class VercelGatewaySceneAI implements SceneAI {
   readonly config: VercelGatewayConfig;
 
@@ -72,14 +177,21 @@ export class VercelGatewaySceneAI implements SceneAI {
             })
           }
         ],
-        response_format: { type: "json_object" },
+        response_format: npcTurnResponseFormat,
         temperature: 0.6,
         max_tokens: 700
       }),
       signal: AbortSignal.timeout(this.config.timeoutMs)
     });
     if (!response.ok) {
-      throw new Error(`Vercel AI Gateway returned ${response.status}.`);
+      const payload = await response.json().catch(() => null) as {
+        error?: { code?: unknown; message?: unknown };
+      } | null;
+      const code = typeof payload?.error?.code === "string" ? ` ${payload.error.code}` : "";
+      const message = typeof payload?.error?.message === "string"
+        ? `: ${payload.error.message.slice(0, 300)}`
+        : "";
+      throw new Error(`Vercel AI Gateway returned ${response.status}${code}${message}`);
     }
     const payload = await response.json() as GatewayResponse;
     const content = payload.choices?.[0]?.message?.content;

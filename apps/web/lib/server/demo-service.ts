@@ -20,18 +20,9 @@ import {
 import type { DemoMemory, DemoState } from "@lifelang/domain";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { createConfiguredSceneAI } from "./ai-settings";
+import { DEMO_IDS } from "./demo-ids";
 
-export const DEMO_IDS = {
-  user: "10000000-0000-4000-8000-000000000001",
-  world: "20000000-0000-4000-8000-000000000001",
-  player: "30000000-0000-4000-8000-000000000001",
-  apartment: "40000000-0000-4000-8000-000000000001",
-  arthur: "50000000-0000-4000-8000-000000000001",
-  maya: "50000000-0000-4000-8000-000000000002",
-  storyline: "60000000-0000-4000-8000-000000000001",
-  scene: "70000000-0000-4000-8000-000000000001",
-  learningItem: "80000000-0000-4000-8000-000000000001"
-} as const;
+export { DEMO_IDS } from "./demo-ids";
 
 type StoredFactObject = {
   content?: string;
@@ -368,12 +359,15 @@ export async function submitPersistentTurn(content: string, requestKey: string) 
   )).limit(1);
   if (existing.length > 0) return loadPersistentDemoState();
 
-  const current = await loadPersistentDemoState();
+  const [current, sceneAI] = await Promise.all([
+    loadPersistentDemoState(),
+    createConfiguredSceneAI()
+  ]);
   if (current.scene.status !== "active") throw new Error("The scene is not active.");
   const authorizedFacts = current.memories
     .filter((memory) => memory.ownerId === DEMO_IDS.arthur && memory.status === "active")
     .map((memory) => memory.content);
-  const measured = await createConfiguredSceneAI().respond({
+  const measured = await sceneAI.respond({
     content,
     turnNumber: current.scene.turnNumber + 1,
     npcId: DEMO_IDS.arthur,

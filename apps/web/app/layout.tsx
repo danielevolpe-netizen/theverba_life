@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import "@fontsource-variable/newsreader/wght.css";
+import "@fontsource-variable/newsreader/wght-italic.css";
+import "@fontsource-variable/jetbrains-mono/wght.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LifeLang — Your second life speaks English",
-  description: "Learn English by living a persistent life in New York."
+  title: "Verba — English at work",
+  description: "L'inglese che regge quando conta, dentro una vita persistente."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

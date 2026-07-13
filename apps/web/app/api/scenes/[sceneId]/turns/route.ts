@@ -13,7 +13,8 @@ export async function POST(request: Request, context: { params: Promise<{ sceneI
   if (!body.success) return json({ error: "Invalid scene turn." }, { status: 400 });
   try {
     return json(await submitPersistentTurn(body.data.content, key.data));
-  } catch {
+  } catch (error) {
+    console.error("Scene turn failed.", error);
     return internalError();
   }
 }

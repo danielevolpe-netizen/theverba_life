@@ -8,10 +8,26 @@ paths:
   /settings/ai:
     get:
       operationId: getAISettings
-      description: Returns only non-secret gateway and model configuration status.
+      description: Returns non-secret gateway catalogs, selected models and actual runtime activity.
       responses:
         "200":
           description: Safe AI runtime settings
+    patch:
+      operationId: selectGatewayModel
+      description: Persists the selected model for a gateway in the current world's configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gatewayId, modelId]
+              properties:
+                gatewayId: { type: string, minLength: 3, maxLength: 80 }
+                modelId: { type: string, minLength: 3, maxLength: 160 }
+      responses:
+        "200": { description: Updated safe AI runtime settings }
+        "400": { description: Invalid or unavailable gateway model selection }
   /demo-state:
     get:
       operationId: getDemoState

@@ -9,6 +9,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource-variable/newsreader": "^5.2.10",
     "@lifelang/ai": "workspace:*",
     "@lifelang/contracts": "workspace:*",
     "@lifelang/db": "workspace:*",
